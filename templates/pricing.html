@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pricing | 805Intelligence</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+  body { background:#f8f9fa; }
+  .pricing-card { border-radius: 12px; }
+  .highlight { border:2px solid #0d6efd; }
+  .feature-table td, .feature-table th { vertical-align: middle; }
+</style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="#">805Intelligence</a>
+    <ul class="navbar-nav ms-auto">
+      <li class="nav-item"><a class="nav-link" href="#">Reports</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Contacts</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Campaigns</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Analytics</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Help</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="text-center py-5">
+  <h1 class="fw-bold">Bring your business to the best scale</h1>
+  <p class="text-muted fs-5">
+    Choose the plan that is right for you and your team.<br>
+    Flexible pricing tailored to fit your business goals
+  </p>
+
+  <div class="btn-group mt-3">
+    <button class="btn btn-outline-primary active">Individual</button>
+    <button class="btn btn-outline-primary">Office</button>
+  </div>
+</section>
+
+<!-- PRICING CARDS -->
+<div class="container">
+  <div class="row g-4">
+
+    <!-- BASIC -->
+    <div class="col-md-4">
+      <div class="card pricing-card p-4 h-100">
+        <h4>BASIC</h4>
+        <h2 class="fw-bold">$0 <small class="fs-6">/ per year</small></h2>
+        <p>Generate a free report</p>
+
+        <ul class="list-unstyled">
+          <li>✔ 1 zip/city report</li>
+          <li>✔ 1 county report</li>
+          <li>✔ Easy-to-share summaries</li>
+          <li>✔ 1 user</li>
+        </ul>
+
+        <a href="{% url 'signup' %}?plan=basic"
+           class="btn btn-outline-primary w-100 mt-auto">
+          Get Started
+        </a>
+      </div>
+    </div>
+
+    <!-- PREMIUM -->
+    <div class="col-md-4">
+      <div class="card pricing-card p-4 h-100 highlight">
+        <h4>PREMIUM</h4>
+        <h2 class="fw-bold">$24 <small class="fs-6">/ per year</small></h2>
+        <p>Automated market insights</p>
+
+        <ul class="list-unstyled">
+          <li>✔ 10 zip/city reports</li>
+          <li>✔ Custom-branded reports</li>
+          <li>✔ Automated marketing suite</li>
+          <li>✔ 1,000 contacts</li>
+          <li>✔ Live training</li>
+        </ul>
+
+        <a href="{% url 'signup' %}?plan=premium"
+           class="btn btn-primary w-100 mt-auto">
+          Get Started
+        </a>
+      </div>
+    </div>
+
+    <!-- PRO -->
+    <div class="col-md-4">
+      <div class="card pricing-card p-4 h-100">
+        <h4>PRO</h4>
+        <h2 class="fw-bold">$24 <small class="fs-6">/ per year</small></h2>
+        <p>Dominate your entire state</p>
+
+        <ul class="list-unstyled">
+          <li>✔ Every report in 1 state</li>
+          <li>✔ 3 users (shared branding)</li>
+          <li>✔ 5,000 contacts</li>
+          <li>✔ Advanced analytics</li>
+          <li>✔ Cancel anytime</li>
+        </ul>
+
+        <a href="{% url 'signup' %}?plan=pro"
+           class="btn btn-outline-primary w-100 mt-auto">
+          Get Started
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FEATURES TABLE -->
+<div class="container my-5">
+  <h3 class="text-center mb-4">Features</h3>
+
+  <table class="table table-bordered feature-table text-center bg-white">
+    <thead>
+      <tr>
+        <th>Features</th>
+        <th>BASIC</th>
+        <th>PREMIUM</th>
+        <th>PRO</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>No of Users</td><td>1</td><td>1</td><td>3</td></tr>
+      <tr><td>No of Reports</td><td>10 zip/city</td><td>1 State</td><td>1 State</td></tr>
+      <tr><td>Downloadable Reports</td><td>✔</td><td>✔</td><td>✔</td></tr>
+      <tr><td>Report Personalization</td><td>—</td><td>✔</td><td>✔</td></tr>
+      <tr><td>Shareable Reports</td><td>✔</td><td>✔</td><td>✔</td></tr>
+      <tr><td>Automated Lead Nurturing</td><td>—</td><td>✔</td><td>✔</td></tr>
+      <tr><td>No of Contacts</td><td>1000</td><td>1000</td><td>5000</td></tr>
+      <tr><td>Monthly Email Sends</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+      <tr><td>API Access</td><td>—</td><td>—</td><td>✔</td></tr>
+      <tr><td>1:1 Live Training</td><td>—</td><td>✔</td><td>✔</td></tr>
+      <tr><td>Custom Dashboards</td><td>—</td><td>—</td><td>✔</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- FOOTER -->
+<footer class="bg-dark text-white pt-5">
+  <div class="container">
+    <div class="row">
+
+      <div class="col-md-3">
+        <h5>Product</h5>
+        <ul class="list-unstyled">
+          <li>Market Report</li>
+          <li>Lead Generation</li>
+          <li>Advanced Analytics</li>
+        </ul>
+      </div>
+
+      <div class="col-md-3">
+        <h5>Solutions</h5>
+        <ul class="list-unstyled">
+          <li>For Agents</li>
+          <li>For Brokers</li>
+          <li>For Mortgage</li>
+          <li>For Title</li>
+        </ul>
+      </div>
+
+      <div class="col-md-3">
+        <h5>Company</h5>
+        <ul class="list-unstyled">
+          <li>About Us</li>
+          <li>Contact Us</li>
+          <li>Book a Demo</li>
+        </ul>
+      </div>
+
+      <div class="col-md-3">
+        <h5>Legal</h5>
+        <ul class="list-unstyled">
+          <li>Privacy Policy</li>
+          <li>Terms of Services</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <hr class="border-secondary">
+    <p class="text-center small">© 805Intelligence. All rights reserved</p>
+  </div>
+</footer>
+
+</body>
+</html>
