@@ -26,7 +26,20 @@ SECRET_KEY = 'django-insecure-_con-t5c1k4l%yglfn94hja_w)e%cxxt%s)@9sf^^y+k&d6cks
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+CORS_ALLOW_ALL_ORIGINS = True # Allow all for now, but explicit is better
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 
 # -------------------------
@@ -41,6 +54,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # Third-party apps
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
 
@@ -52,6 +66,7 @@ INSTALLED_APPS = [
 # MIDDLEWARE
 # -------------------------
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -91,16 +106,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'intelligence805.wsgi.application'
 
 # -------------------------
-# DATABASE CONFIGURATION (PostgreSQL)
+# DATABASE CONFIGURATION (SQLite for development)
 # -------------------------
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'intelligence805',        # Your PostgreSQL DB name
-        'USER': 'postgres',             # Your PostgreSQL username
-        'PASSWORD': 'qwerty123456',    # Your PostgreSQL password
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 

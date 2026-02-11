@@ -20,9 +20,9 @@ SECRET_KEY = 'django-insecure-your-secret-key'
 # -------------------------
 # DEBUG
 # -------------------------
-DEBUG = False  # Change to False in production
+DEBUG = True  # Change to False in production
 
-ALLOWED_HOSTS = []  # Add your domain in production
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']  # Add your domain in production
 
 # -------------------------
 # INSTALLED APPS
@@ -37,6 +37,7 @@ INSTALLED_APPS = [
 
     # Third-party apps
     'rest_framework',
+    'corsheaders',
 
     # Your apps
     'accounts',
@@ -48,12 +49,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True # Allow all origins for development
 
 # -------------------------
 # ROOT URL
@@ -85,7 +89,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'intelligence805.wsgi.application'
 
 # -------------------------
-# DATABASE CONFIGURATION (PostgreSQL)
+# DATABASE CONFIGURATION (SQLite for development)
 # -------------------------
 DATABASES = {
     'default': {
