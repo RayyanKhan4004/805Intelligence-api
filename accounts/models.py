@@ -38,7 +38,7 @@ class UserProfile(models.Model):
 
     # 🔐 Email verification
     email_verified = models.BooleanField(default=False)
-    email_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    email_token = models.UUIDField(default=uuid.uuid4, unique=True, null=True, blank=True)
 
     # -----------------------------
     # Send email verification

@@ -2,11 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Membership, UserProfile
 from .serializers import MembershipSerializer, RegisterSerializer
 from django.utils import timezone
+
 
 class VerifyEmailAPI(APIView):
     """
@@ -38,6 +40,7 @@ class VerifyEmailAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 # -------------------------
 # Helper: Generate JWT tokens
 # -------------------------
@@ -48,16 +51,18 @@ def get_tokens_for_user(user):
         'access': str(refresh.access_token),
     }
 
+
 # -------------------------
 # Membership list API
 # -------------------------
 class MembershipListAPI(APIView):
-    permission_classes = [IsAuthenticated]  # <-- NEW: Protect endpoint with JWT
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         plans = Membership.objects.all()
         serializer = MembershipSerializer(plans, many=True)
         return Response(serializer.data)
+
 
 # -------------------------
 # Register API (signup)
@@ -66,34 +71,46 @@ class RegisterAPI(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()  # <-- create user
-            tokens = get_tokens_for_user(user)  # <-- NEW: generate JWT tokens
+            user = serializer.save()
+            tokens = get_tokens_for_user(user)
             return Response({
                 "message": "User registered successfully",
                 "tokens": tokens
             }, status=201)
         return Response(serializer.errors, status=400)
 
+
 # -------------------------
-# Login API
+# Login API (email + password)
 # -------------------------
 class LoginAPI(APIView):
     def post(self, request):
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
 
-        if not username or not password:
+        if not email or not password:
             return Response(
-                {"error": "Username and password are required"},
+                {"error": "Email and password are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        user = authenticate(username=username, password=password)
+
+        # Look up user by email, then authenticate with their username
+        try:
+            user_obj = User.objects.get(email=email.lower())
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        user = authenticate(username=user_obj.username, password=password)
 
         if not user:
             return Response(
                 {"error": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
         try:
             profile = UserProfile.objects.get(user=user)
         except UserProfile.DoesNotExist:

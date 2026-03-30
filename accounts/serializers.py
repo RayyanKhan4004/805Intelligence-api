@@ -29,7 +29,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = [
             'first_name',
             'last_name',
-            'username',
             'email',
             'password',
             'membership',
@@ -41,31 +40,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         }
 
     # -------------------------
-    # Gmail validation
+    # Email validation
     # -------------------------
     def validate_email(self, value):
         value = value.lower()
-
-        if not value.endswith("@gmail.com"):
-            raise serializers.ValidationError(
-                "Only Gmail addresses are allowed (example@gmail.com)."
-            )
 
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError(
                 "This email is already registered."
             )
 
-        return value
-
-    # -------------------------
-    # Username validation
-    # -------------------------
-    def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError(
-                "A user with this username already exists."
-            )
         return value
 
     # -------------------------
@@ -88,14 +72,16 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         membership = Membership.objects.get(name=membership_name)
 
-        # Create user
+        # Use email as the username internally (keeps Django's auth happy)
+        email = validated_data['email']
+
         user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
+            username=email,
+            email=email,
             password=validated_data['password'],
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
-            is_active=True  # keep active, but restrict access until email verified
+            is_active=True
         )
 
         # Generate email verification token
@@ -122,7 +108,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 f"Please confirm your email address to complete your registration.\n\n"
                 f"Verify Email Address:\n{verify_url}\n\n"
                 f"This link will expire in 24 hours.\n\n"
-                f"If you didn’t create this account, you can ignore this email.\n\n"
+                f"If you didn't create this account, you can ignore this email.\n\n"
                 f"Thank you,\n"
                 f"The 805Intelligence Team"
             ),
