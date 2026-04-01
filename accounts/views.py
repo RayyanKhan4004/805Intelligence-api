@@ -3,18 +3,33 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.conf import settings
+from django.core.mail import send_mail
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+import uuid
+
 from .models import Membership, UserProfile
 from .serializers import MembershipSerializer, RegisterSerializer
-from django.utils import timezone
 
 
+# -------------------------
+# Helper: Generate JWT tokens
+# -------------------------
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
+
+
+# -------------------------
+# Verify Email
+# -------------------------
 class VerifyEmailAPI(APIView):
-    """
-    Verify email using token
-    """
-
     def get(self, request, token):
         try:
             profile = UserProfile.objects.get(email_token=token)
@@ -42,17 +57,6 @@ class VerifyEmailAPI(APIView):
 
 
 # -------------------------
-# Helper: Generate JWT tokens
-# -------------------------
-def get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
-
-
-# -------------------------
 # Membership list API
 # -------------------------
 class MembershipListAPI(APIView):
@@ -65,7 +69,7 @@ class MembershipListAPI(APIView):
 
 
 # -------------------------
-# Register API (signup)
+# Register API
 # -------------------------
 class RegisterAPI(APIView):
     def post(self, request):
@@ -94,7 +98,6 @@ class LoginAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Look up user by email, then authenticate with their username
         try:
             user_obj = User.objects.get(email=email.lower())
         except User.DoesNotExist:
@@ -133,11 +136,129 @@ class LoginAPI(APIView):
                 "refresh": tokens["refresh"],
                 "user": {
                     "id": user.id,
-                    "username": user.username,
                     "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
                     "membership": profile.membership.name if profile.membership else None,
                     "role": profile.role,
                 }
             },
+            status=status.HTTP_200_OK
+        )
+
+
+# -------------------------
+# Forgot Password
+# POST /api/forgot-password/
+# Body: { "email": "user@gmail.com" }
+# -------------------------
+class ForgotPasswordAPI(APIView):
+    def post(self, request):
+        email = request.data.get('email')
+
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = User.objects.get(email=email.lower())
+            profile = UserProfile.objects.get(user=user)
+        except (User.DoesNotExist, UserProfile.DoesNotExist):
+            # Return success anyway to avoid exposing which emails are registered
+            return Response(
+                {"message": "If that email exists, a reset link has been sent."},
+                status=status.HTTP_200_OK
+            )
+
+        # Generate reset token valid for 1 hour
+        token = uuid.uuid4()
+        profile.password_reset_token = token
+        profile.password_reset_expires = timezone.now() + timedelta(hours=1)
+        profile.save()
+
+        reset_url = f"http://127.0.0.1:8000/api/reset-password/{token}/"
+
+        send_mail(
+            subject="Reset Your Password | 805Intelligence",
+            message=(
+                f"Hi {user.first_name},\n\n"
+                f"We received a request to reset your password.\n\n"
+                f"Click the link below to set a new password:\n"
+                f"{reset_url}\n\n"
+                f"This link expires in 1 hour.\n\n"
+                f"If you didn't request this, you can safely ignore this email.\n\n"
+                f"Thank you,\n"
+                f"The 805Intelligence Team"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+
+        return Response(
+            {"message": "If that email exists, a reset link has been sent."},
+            status=status.HTTP_200_OK
+        )
+
+
+# -------------------------
+# Reset Password
+# POST /api/reset-password/<token>/
+# Body: { "password": "NewPass123", "confirm_password": "NewPass123" }
+# -------------------------
+class ResetPasswordAPI(APIView):
+    def post(self, request, token):
+        password = request.data.get('password')
+        confirm_password = request.data.get('confirm_password')
+
+        if not password or not confirm_password:
+            return Response(
+                {"error": "Password and confirm_password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if password != confirm_password:
+            return Response(
+                {"error": "Passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(password) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            profile = UserProfile.objects.get(password_reset_token=token)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Invalid or expired reset link"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check token hasn't expired
+        if timezone.now() > profile.password_reset_expires:
+            profile.password_reset_token = None
+            profile.password_reset_expires = None
+            profile.save()
+            return Response(
+                {"error": "Reset link has expired. Please request a new one."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password and clear the token
+        user = profile.user
+        user.set_password(password)
+        user.save()
+
+        profile.password_reset_token = None
+        profile.password_reset_expires = None
+        profile.save()
+
+        return Response(
+            {"message": "Password reset successfully. You can now log in."},
             status=status.HTTP_200_OK
         )

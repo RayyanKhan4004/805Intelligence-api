@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 
+
 class Membership(models.Model):
     PLAN_CHOICES = [
         ('basic', 'Basic'),
@@ -40,6 +41,10 @@ class UserProfile(models.Model):
     email_verified = models.BooleanField(default=False)
     email_token = models.UUIDField(default=uuid.uuid4, unique=True, null=True, blank=True)
 
+    # 🔑 Password reset
+    password_reset_token = models.UUIDField(null=True, blank=True, unique=True)
+    password_reset_expires = models.DateTimeField(null=True, blank=True)
+
     # -----------------------------
     # Send email verification
     # -----------------------------
@@ -52,7 +57,7 @@ class UserProfile(models.Model):
                     f"{verification_url}\n\n"
                     f"This link will expire in 24 hours.\n\n"
                     f"Thank you, The 805Intelligence Team",
-            from_email='805Intelligence <your-email@gmail.com>',  # replace with your EMAIL_HOST_USER
+            from_email='805Intelligence <your-email@gmail.com>',
             recipient_list=[self.user.email],
             fail_silently=False,
         )

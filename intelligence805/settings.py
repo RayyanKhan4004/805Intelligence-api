@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 
     # Your apps
     'accounts',
+    'locations',
 ]
 
 # -------------------------
@@ -107,12 +108,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'intelligence805.wsgi.application'
 
 # -------------------------
-# DATABASE CONFIGURATION (SQLite for development)
+# DATABASE CONFIGURATION
 # -------------------------
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'intelligence805',
+        'USER': 'postgres',
+        'PASSWORD': 'qwerty123456',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
