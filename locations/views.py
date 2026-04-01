@@ -34,7 +34,7 @@ class SearchAPI(APIView):
             )
 
         if search_type == 'county':
-            results = County.objects.filter(
+            results = County.objects.prefetch_related('cities', 'cities__farms').filter(
                 Q(name__icontains=query) | Q(code__icontains=query)
             )
             serializer = CountySerializer(results, many=True)
