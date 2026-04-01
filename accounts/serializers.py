@@ -118,3 +118,71 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
         return user
+
+
+# -------------------------
+# User Profile Serializer (GET)
+# -------------------------
+class UserProfileSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source='user.first_name')
+    last_name = serializers.CharField(source='user.last_name')
+    email = serializers.EmailField(source='user.email')
+    membership = MembershipSerializer(read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'first_name',
+            'last_name',
+            'email',
+            'company',
+            'role',
+            'membership',
+        ]
+
+
+# -------------------------
+# User Profile Update Serializer (PATCH)
+# -------------------------
+class UpdateProfileSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'first_name',
+            'last_name',
+            'email',
+            'company',
+        ]
+
+    def validate_email(self, value):
+        value = value.lower()
+        user = self.context['request'].user
+        # Allow same email, only block if another user has it
+        if User.objects.filter(email=value).exclude(id=user.id).exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
+
+    def update(self, instance, validated_data):
+        user = instance.user
+
+        # Update User model fields
+        if 'first_name' in validated_data:
+            user.first_name = validated_data.pop('first_name')
+        if 'last_name' in validated_data:
+            user.last_name = validated_data.pop('last_name')
+        if 'email' in validated_data:
+            new_email = validated_data.pop('email')
+            user.email = new_email
+            user.username = new_email  # keep username in sync
+        user.save()
+
+        # Update UserProfile fields
+        if 'company' in validated_data:
+            instance.company = validated_data['company']
+        instance.save()
+
+        return instance

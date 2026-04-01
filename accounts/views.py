@@ -262,3 +262,109 @@ class ResetPasswordAPI(APIView):
             {"message": "Password reset successfully. You can now log in."},
             status=status.HTTP_200_OK
         )
+
+
+# -------------------------
+# User Profile API
+# GET  /api/profile/  → view own profile
+# PATCH /api/profile/ → edit first_name, last_name, email, company
+# -------------------------
+class UserProfileAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = UserProfile.objects.select_related('user', 'membership').get(user=request.user)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        from .serializers import UserProfileSerializer
+        serializer = UserProfileSerializer(profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        try:
+            profile = UserProfile.objects.get(user=request.user)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        from .serializers import UpdateProfileSerializer
+        serializer = UpdateProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,          # all fields optional
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Profile updated successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# -------------------------
+# Change Password API
+# POST /api/change-password/
+# Body: { "current_password": "...", "new_password": "...", "confirm_new_password": "..." }
+# -------------------------
+class ChangePasswordAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        confirm_new_password = request.data.get('confirm_new_password')
+
+        # Check all fields are provided
+        if not current_password or not new_password or not confirm_new_password:
+            return Response(
+                {"error": "current_password, new_password and confirm_new_password are all required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check current password is correct
+        if not request.user.check_password(current_password):
+            return Response(
+                {"error": "Current password is incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check new passwords match
+        if new_password != confirm_new_password:
+            return Response(
+                {"error": "New passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check new password is not the same as current
+        if current_password == new_password:
+            return Response(
+                {"error": "New password must be different from your current password"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check minimum length
+        if len(new_password) < 8:
+            return Response(
+                {"error": "New password must be at least 8 characters"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Save new password
+        request.user.set_password(new_password)
+        request.user.save()
+
+        return Response(
+            {"message": "Password changed successfully. Please log in again with your new password."},
+            status=status.HTTP_200_OK
+        )
