@@ -62,6 +62,8 @@ INSTALLED_APPS = [
     # Your apps
     'accounts',
     'locations',
+    'properties',
+    'reports',
 ]
 
 # -------------------------
