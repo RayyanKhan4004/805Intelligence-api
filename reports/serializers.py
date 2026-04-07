@@ -107,3 +107,62 @@ class CreateReportSerializer(serializers.Serializer):
             if city and city.county_id != county_id:
                 raise serializers.ValidationError("Selected city does not belong to the selected county.")
         return data
+
+
+# -------------------------
+# Grid View Serializer — compact card view
+# -------------------------
+class ReportGridSerializer(serializers.ModelSerializer):
+    county_name = serializers.SerializerMethodField()
+    city_name = serializers.SerializerMethodField()
+    farm_names = serializers.SerializerMethodField()
+    result = ReportResultSerializer(read_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            'id', 'name', 'status', 'format', 'visibility', 'schedule',
+            'county_name', 'city_name', 'farm_names',
+            'metrics', 'agent_name',
+            'created_at', 'updated_at',
+            'result',
+        ]
+
+    def get_county_name(self, obj):
+        county = obj.county
+        return county.name if county else None
+
+    def get_city_name(self, obj):
+        city = obj.city
+        return city.name if city else None
+
+    def get_farm_names(self, obj):
+        return list(obj.farms.values_list('name', flat=True))
+
+
+# -------------------------
+# List View Serializer — detailed with metrics
+# -------------------------
+class ReportListViewSerializer(serializers.ModelSerializer):
+    county_name = serializers.SerializerMethodField()
+    city_name = serializers.SerializerMethodField()
+    farm_names = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Report
+        fields = [
+            'id', 'name', 'status', 'format',
+            'visibility', 'county_name', 'city_name',
+            'farm_names', 'created_at',
+        ]
+
+    def get_county_name(self, obj):
+        county = obj.county
+        return county.name if county else None
+
+    def get_city_name(self, obj):
+        city = obj.city
+        return city.name if city else None
+
+    def get_farm_names(self, obj):
+        return list(obj.farms.values_list('name', flat=True))

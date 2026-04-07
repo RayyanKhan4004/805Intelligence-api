@@ -5,7 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from .models import Report, ReportResult, ReportFarm
-from .serializers import CreateReportSerializer, ReportListSerializer, ReportDetailSerializer
+from .serializers import (
+    CreateReportSerializer,
+    ReportListSerializer,
+    ReportDetailSerializer,
+    ReportGridSerializer,
+    ReportListViewSerializer,
+)
 from .calculator import calculate_metrics
 from locations.models import County, City, Farm
 from locations.serializers import CitySerializer, FarmSerializer
@@ -70,7 +76,7 @@ def _calculate_and_save(report, selected_metrics):
 
 
 # -------------------------
-# Reports CRUD
+# Reports List + Create
 # -------------------------
 
 class ReportListCreateAPI(APIView):
@@ -78,8 +84,20 @@ class ReportListCreateAPI(APIView):
 
     def get(self, request):
         reports = Report.objects.filter(user=request.user).order_by('-created_at')
-        serializer = ReportListSerializer(reports, many=True)
-        return Response(serializer.data)
+
+        view_type = request.query_params.get('view', 'grid').lower()
+
+        if view_type == 'list':
+            serializer = ReportListViewSerializer(reports, many=True)
+        else:
+            # Default is grid view
+            serializer = ReportGridSerializer(reports, many=True)
+
+        return Response({
+            "view": view_type,
+            "count": reports.count(),
+            "reports": serializer.data,
+        })
 
     def post(self, request):
         serializer = CreateReportSerializer(data=request.data)
@@ -102,6 +120,10 @@ class ReportListCreateAPI(APIView):
             status=status.HTTP_201_CREATED
         )
 
+
+# -------------------------
+# Report Detail, Edit, Delete
+# -------------------------
 
 class ReportDetailAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -141,3 +163,43 @@ class ReportDetailAPI(APIView):
         report = self.get_object(request, report_id)
         report.delete()
         return Response({"message": "Report deleted successfully"}, status=status.HTTP_200_OK)
+
+
+# -------------------------
+# Report Form Options
+# -------------------------
+class ReportOptionsAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from locations.serializers import CountySerializer
+        counties = County.objects.all().order_by('name')
+
+        return Response({
+            "counties": CountySerializer(counties, many=True).data,
+            "metrics": [
+                {"key": "median_list_price",  "label": "Median List Price"},
+                {"key": "median_sale_price",  "label": "Median Sale Price"},
+                {"key": "price_per_sqft",     "label": "Price Per Sq. Ft."},
+                {"key": "days_on_market",     "label": "Days on Market (DOM)"},
+                {"key": "inventory",          "label": "Inventory / Active Listings"},
+                {"key": "list_to_sale_ratio", "label": "List-to-Sale Price Ratio"},
+                {"key": "price_reductions",   "label": "Price Reductions %"},
+                {"key": "new_vs_closed",      "label": "New Listings vs. Closed Sales"},
+            ],
+            "formats": [
+                {"key": "pdf",   "label": "PDF"},
+                {"key": "web",   "label": "Web"},
+                {"key": "email", "label": "Email"},
+            ],
+            "visibility_options": [
+                {"key": "private", "label": "Private"},
+                {"key": "shared",  "label": "Shared"},
+                {"key": "public",  "label": "Public"},
+            ],
+            "schedule_options": [
+                {"key": "one_time", "label": "One Time"},
+                {"key": "weekly",   "label": "Weekly"},
+                {"key": "monthly",  "label": "Monthly"},
+            ],
+        })
