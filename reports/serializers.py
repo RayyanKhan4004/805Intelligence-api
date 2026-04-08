@@ -8,15 +8,14 @@ class ReportResultSerializer(serializers.ModelSerializer):
         model = ReportResult
         fields = [
             'calculated_at',
-            'median_list_price',
-            'median_sale_price',
-            'price_per_sqft',
-            'days_on_market',
             'inventory',
-            'list_to_sale_ratio',
-            'price_reductions_pct',
-            'new_listings',
-            'closed_sales',
+            'avg_dom',
+            'median_dom',
+            'price_per_sqft',
+            'price_decreased_pct',
+            'price_increased_pct',
+            'median_list_price',
+            'median_price_new_listings',
         ]
 
 
@@ -26,7 +25,7 @@ class ReportListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Report
-        fields = ['id', 'name', 'status', 'format', 'visibility', 'county_name', 'city_name', 'created_at']
+        fields = ['id', 'status', 'format', 'visibility', 'county_name', 'city_name', 'created_at']
 
     def get_county_name(self, obj):
         county = obj.county
@@ -46,7 +45,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = [
-            'id', 'name', 'status',
+            'id', 'status',
             'county_id', 'county_name',
             'city_id', 'city_name',
             'farm_names', 'metrics',
@@ -116,16 +115,13 @@ class ReportGridSerializer(serializers.ModelSerializer):
     county_name = serializers.SerializerMethodField()
     city_name = serializers.SerializerMethodField()
     farm_names = serializers.SerializerMethodField()
-    result = ReportResultSerializer(read_only=True)
 
     class Meta:
         model = Report
         fields = [
-            'id', 'name', 'status', 'format', 'visibility', 'schedule',
-            'county_name', 'city_name', 'farm_names',
-            'metrics', 'agent_name',
-            'created_at', 'updated_at',
-            'result',
+            'id', 'status', 'format',
+            'visibility', 'county_name', 'city_name',
+            'farm_names', 'created_at',
         ]
 
     def get_county_name(self, obj):
@@ -147,13 +143,16 @@ class ReportListViewSerializer(serializers.ModelSerializer):
     county_name = serializers.SerializerMethodField()
     city_name = serializers.SerializerMethodField()
     farm_names = serializers.SerializerMethodField()
+    result = ReportResultSerializer(read_only=True)
 
     class Meta:
         model = Report
         fields = [
-            'id', 'name', 'status', 'format',
-            'visibility', 'county_name', 'city_name',
-            'farm_names', 'created_at',
+            'id', 'status', 'format', 'visibility', 'schedule',
+            'county_name', 'city_name', 'farm_names',
+            'metrics', 'agent_name',
+            'created_at', 'updated_at',
+            'result',
         ]
 
     def get_county_name(self, obj):

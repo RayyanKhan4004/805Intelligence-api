@@ -3,11 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from .models import Report, ReportResult, ReportFarm
 from .serializers import (
     CreateReportSerializer,
-    ReportListSerializer,
     ReportDetailSerializer,
     ReportGridSerializer,
     ReportListViewSerializer,
@@ -22,31 +22,66 @@ from locations.serializers import CitySerializer, FarmSerializer
 # -------------------------
 
 class CitiesByCountyAPI(APIView):
-    """GET /api/counties/<county_id>/cities/"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, county_id):
         county = get_object_or_404(County, id=county_id)
         cities = City.objects.filter(county=county).order_by('name')
-        serializer = CitySerializer(cities, many=True)
-        return Response({"county": county.name, "cities": serializer.data})
+        return Response({"county": county.name, "cities": CitySerializer(cities, many=True).data})
 
 
 class FarmsByCityAPI(APIView):
-    """GET /api/cities/<city_id>/farms/"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, city_id):
         city = get_object_or_404(City, id=city_id)
         farms = Farm.objects.filter(city=city).order_by('name')
-        serializer = FarmSerializer(farms, many=True)
-        return Response({"city": city.name, "farms": serializer.data})
+        return Response({"city": city.name, "farms": FarmSerializer(farms, many=True).data})
 
 
 # -------------------------
 # Helper: run calculation and save results
 # -------------------------
+# Old key → New key mapping (backward compatibility)
+# -------------------------
+METRIC_ALIAS_MAP = {
+    'median_sale_price':  None,           # removed, no equivalent
+    'days_on_market':     'avg_dom',
+    'list_to_sale_ratio': None,           # removed, no equivalent
+    'price_reductions':   'price_decreased_pct',
+    'new_vs_closed':      None,           # removed, no equivalent
+    'price_decreased':    'price_decreased_pct',
+    'price_increased':    'price_increased_pct',
+    'median_new_listing_price': 'median_price_new_listings',
+}
+
+VALID_METRICS = {m[0] for m in Report.METRIC_CHOICES}
+
+
+def _normalize_metrics(metrics):
+    """Remap old metric keys to new ones, drop invalid/removed ones."""
+    normalized = []
+    for key in metrics:
+        if key in VALID_METRICS:
+            normalized.append(key)
+        elif key in METRIC_ALIAS_MAP:
+            new_key = METRIC_ALIAS_MAP[key]
+            if new_key and new_key not in normalized:
+                normalized.append(new_key)
+        # else: silently drop unknown/removed keys
+    return normalized
+
+
+# -------------------------
 def _calculate_and_save(report, selected_metrics):
+    # Auto-remap any old keys before calculating
+    selected_metrics = _normalize_metrics(selected_metrics)
+
+    # Persist normalized keys back to report if they changed
+    if selected_metrics != report.metrics:
+        report.metrics = selected_metrics
+        report.save(update_fields=['metrics'])
+
     from properties.models import Property
     props = Property.objects.all()
     if report.county_id:
@@ -62,39 +97,63 @@ def _calculate_and_save(report, selected_metrics):
     ReportResult.objects.update_or_create(
         report=report,
         defaults={
-            'median_list_price':    metric_data.get('median_list_price'),
-            'median_sale_price':    metric_data.get('median_sale_price'),
-            'price_per_sqft':       metric_data.get('price_per_sqft'),
-            'days_on_market':       metric_data.get('days_on_market'),
-            'inventory':            metric_data.get('inventory'),
-            'list_to_sale_ratio':   metric_data.get('list_to_sale_ratio'),
-            'price_reductions_pct': metric_data.get('price_reductions_pct'),
-            'new_listings':         metric_data.get('new_listings'),
-            'closed_sales':         metric_data.get('closed_sales'),
+            'inventory':                  metric_data.get('inventory'),
+            'avg_dom':                    metric_data.get('avg_dom'),
+            'median_dom':                 metric_data.get('median_dom'),
+            'price_per_sqft':             metric_data.get('price_per_sqft'),
+            'price_decreased_pct':        metric_data.get('price_decreased_pct'),
+            'price_increased_pct':        metric_data.get('price_increased_pct'),
+            'median_list_price':          metric_data.get('median_list_price'),
+            'median_price_new_listings':  metric_data.get('median_price_new_listings'),
         }
     )
 
 
 # -------------------------
 # Reports List + Create
+# GET  /api/reports/?view=grid&sort=az
+# GET  /api/reports/?view=list&sort=za
+# GET  /api/reports/?view=grid&sort=views
+# POST /api/reports/
 # -------------------------
 
 class ReportListCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        reports = Report.objects.filter(user=request.user).order_by('-created_at')
+        reports = Report.objects.filter(user=request.user)
 
+        # ---- Recalculate all reports with latest data ----
+        for report in reports.filter(status='generated'):
+            _calculate_and_save(report, report.metrics)
+
+        # ---- Sorting ----
+        sort = request.query_params.get('sort', 'latest').lower()
+
+        if sort == 'az':
+            # A to Z by report name
+            reports = reports.order_by('name')
+        elif sort == 'za':
+            # Z to A by report name
+            reports = reports.order_by('-name')
+        elif sort == 'views':
+            # Most recently viewed first, unviewed reports go to bottom
+            reports = reports.order_by('-last_viewed_at', '-created_at')
+        else:
+            # Default: latest created first
+            reports = reports.order_by('-created_at')
+
+        # ---- View type ----
         view_type = request.query_params.get('view', 'grid').lower()
 
         if view_type == 'list':
-            serializer = ReportListViewSerializer(reports, many=True)
-        else:
-            # Default is grid view
             serializer = ReportGridSerializer(reports, many=True)
+        else:
+            serializer = ReportListViewSerializer(reports, many=True)
 
         return Response({
             "view": view_type,
+            "sort": sort,
             "count": reports.count(),
             "reports": serializer.data,
         })
@@ -123,6 +182,9 @@ class ReportListCreateAPI(APIView):
 
 # -------------------------
 # Report Detail, Edit, Delete
+# GET    /api/reports/<id>/  → also tracks view
+# PATCH  /api/reports/<id>/
+# DELETE /api/reports/<id>/
 # -------------------------
 
 class ReportDetailAPI(APIView):
@@ -133,6 +195,15 @@ class ReportDetailAPI(APIView):
 
     def get(self, request, report_id):
         report = self.get_object(request, report_id)
+
+        # Recalculate metrics with latest data every time report is viewed
+        _calculate_and_save(report, report.metrics)
+
+        # Track the view
+        report.views_count += 1
+        report.last_viewed_at = timezone.now()
+        report.save(update_fields=['views_count', 'last_viewed_at'])
+
         return Response(ReportDetailSerializer(report).data)
 
     def patch(self, request, report_id):
@@ -178,14 +249,14 @@ class ReportOptionsAPI(APIView):
         return Response({
             "counties": CountySerializer(counties, many=True).data,
             "metrics": [
-                {"key": "median_list_price",  "label": "Median List Price"},
-                {"key": "median_sale_price",  "label": "Median Sale Price"},
-                {"key": "price_per_sqft",     "label": "Price Per Sq. Ft."},
-                {"key": "days_on_market",     "label": "Days on Market (DOM)"},
-                {"key": "inventory",          "label": "Inventory / Active Listings"},
-                {"key": "list_to_sale_ratio", "label": "List-to-Sale Price Ratio"},
-                {"key": "price_reductions",   "label": "Price Reductions %"},
-                {"key": "new_vs_closed",      "label": "New Listings vs. Closed Sales"},
+                {"key": "inventory",                 "label": "Inventory"},
+                {"key": "avg_dom",                   "label": "Avg DOM"},
+                {"key": "median_dom",                "label": "Median DOM"},
+                {"key": "price_per_sqft",            "label": "Price Per Sq. Ft."},
+                {"key": "price_decreased_pct",       "label": "Price Decreased %"},
+                {"key": "price_increased_pct",       "label": "Price Increased %"},
+                {"key": "median_list_price",         "label": "Median List Price"},
+                {"key": "median_price_new_listings", "label": "Median Price of New Listings"},
             ],
             "formats": [
                 {"key": "pdf",   "label": "PDF"},

@@ -28,14 +28,14 @@ class Report(models.Model):
     ]
 
     METRIC_CHOICES = [
-        ('median_list_price', 'Median List Price'),
-        ('median_sale_price', 'Median Sale Price'),
+        ('inventory', 'Inventory'),
+        ('avg_dom', 'Avg DOM'),
+        ('median_dom', 'Median DOM'),
         ('price_per_sqft', 'Price Per Sq. Ft.'),
-        ('days_on_market', 'Days on Market'),
-        ('inventory', 'Inventory / Active Listings'),
-        ('list_to_sale_ratio', 'List-to-Sale Price Ratio'),
-        ('price_reductions', 'Price Reductions %'),
-        ('new_vs_closed', 'New Listings vs. Closed Sales'),
+        ('price_decreased_pct', 'Price Decreased %'),
+        ('price_increased_pct', 'Price Increased %'),
+        ('median_list_price', 'Median List Price'),
+        ('median_price_new_listings', 'Median Price of New Listings'),
     ]
 
     # Core
@@ -60,6 +60,10 @@ class Report(models.Model):
     # Branding
     agent_name = models.CharField(max_length=255, blank=True)
     agent_logo_url = models.URLField(blank=True)
+
+    # View tracking
+    views_count = models.IntegerField(default=0)
+    last_viewed_at = models.DateTimeField(null=True, blank=True)
 
     # Helper properties to access location objects
     @property
@@ -104,15 +108,14 @@ class ReportResult(models.Model):
     report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='result')
     calculated_at = models.DateTimeField(auto_now=True)
 
-    median_list_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    median_sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    price_per_sqft = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    days_on_market = models.FloatField(null=True, blank=True)
     inventory = models.IntegerField(null=True, blank=True)
-    list_to_sale_ratio = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
-    price_reductions_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    new_listings = models.IntegerField(null=True, blank=True)
-    closed_sales = models.IntegerField(null=True, blank=True)
+    avg_dom = models.FloatField(null=True, blank=True)
+    median_dom = models.FloatField(null=True, blank=True)
+    price_per_sqft = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price_decreased_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    price_increased_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    median_list_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    median_price_new_listings = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f"Results for {self.report.name}"

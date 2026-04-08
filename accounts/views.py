@@ -12,6 +12,47 @@ from rest_framework_simplejwt.tokens import RefreshToken
 import uuid
 
 from .models import Membership, UserProfile
+
+
+# -------------------------
+# Helper: recalculate all reports for a user
+# -------------------------
+def _recalculate_user_reports(user):
+    try:
+        from reports.models import Report, ReportFarm, ReportResult
+        from reports.calculator import calculate_metrics
+        from properties.models import Property
+
+        reports = Report.objects.filter(user=user, status="generated")
+        for report in reports:
+            props = Property.objects.all()
+            if report.county_id:
+                props = props.filter(county_id=report.county_id)
+            if report.city_id:
+                props = props.filter(city_id=report.city_id)
+            farm_ids = list(ReportFarm.objects.filter(report=report).values_list("farm_id", flat=True))
+            if farm_ids:
+                props = props.filter(farm_id__in=farm_ids)
+
+            metric_data = calculate_metrics(props, report.metrics)
+            ReportResult.objects.update_or_create(
+                report=report,
+                defaults={
+                    "inventory":                metric_data.get("inventory"),
+                    "avg_dom":                  metric_data.get("avg_dom"),
+                    "median_dom":               metric_data.get("median_dom"),
+                    "market_action_index":      metric_data.get("market_action_index"),
+                    "market_type":              metric_data.get("market_type", ""),
+                    "price_per_sqft":           metric_data.get("price_per_sqft"),
+                    "price_decreased_pct":      metric_data.get("price_decreased_pct"),
+                    "price_increased_pct":      metric_data.get("price_increased_pct"),
+                    "median_list_price":        metric_data.get("median_list_price"),
+                    "median_new_listing_price": metric_data.get("median_new_listing_price"),
+                }
+            )
+    except Exception:
+        # Never block login if recalculation fails
+        pass
 from .serializers import MembershipSerializer, RegisterSerializer
 
 
@@ -129,6 +170,10 @@ class LoginAPI(APIView):
             )
 
         tokens = get_tokens_for_user(user)
+
+        # Recalculate all reports on login
+        _recalculate_user_reports(user)
+
         return Response(
             {
                 "message": "Login successful",
@@ -366,5 +411,58 @@ class ChangePasswordAPI(APIView):
 
         return Response(
             {"message": "Password changed successfully. Please log in again with your new password."},
+            status=status.HTTP_200_OK
+        )
+
+
+# -------------------------
+# Change Password API
+# POST /api/change-password/
+# Body: { "current_password": "...", "new_password": "...", "confirm_password": "..." }
+# -------------------------
+class ChangePasswordAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+
+        if not current_password or not new_password or not confirm_password:
+            return Response(
+                {"error": "current_password, new_password and confirm_password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check current password is correct
+        if not request.user.check_password(current_password):
+            return Response(
+                {"error": "Current password is incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if new_password != confirm_password:
+            return Response(
+                {"error": "New passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(new_password) < 8:
+            return Response(
+                {"error": "New password must be at least 8 characters"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if current_password == new_password:
+            return Response(
+                {"error": "New password must be different from current password"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        request.user.set_password(new_password)
+        request.user.save()
+
+        return Response(
+            {"message": "Password changed successfully. Please log in again."},
             status=status.HTTP_200_OK
         )
