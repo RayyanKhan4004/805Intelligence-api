@@ -466,3 +466,257 @@ class ChangePasswordAPI(APIView):
             {"message": "Password changed successfully. Please log in again."},
             status=status.HTTP_200_OK
         )
+
+
+# -------------------------
+# Portfolio User Management
+# Only Portfolio Admins can access these endpoints
+# -------------------------
+
+def _is_portfolio_admin(user):
+    try:
+        return UserProfile.objects.get(user=user).is_portfolio_admin
+    except UserProfile.DoesNotExist:
+        return False
+
+
+class PortfolioUserListCreateAPI(APIView):
+    """
+    GET  /api/portfolio/users/       → list all sub-users
+    POST /api/portfolio/users/       → add a new sub-user & send invite email
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_portfolio_admin(request.user):
+            return Response(
+                {"error": "Only Portfolio Administrators can manage users."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        from .models import PortfolioUser
+        users = PortfolioUser.objects.filter(portfolio_admin=request.user).order_by('last_name')
+
+        data = [
+            {
+                "id": u.id,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "email": u.email,
+                "access_level": u.access_level,
+                "is_portfolio_admin": u.is_portfolio_admin,
+                "invite_accepted": u.invite_accepted,
+                "created_at": u.created_at,
+            }
+            for u in users
+        ]
+        return Response(data)
+
+    def post(self, request):
+        if not _is_portfolio_admin(request.user):
+            return Response(
+                {"error": "Only Portfolio Administrators can add users."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        from .models import PortfolioUser
+        from django.utils import timezone as tz
+
+        first_name         = request.data.get('first_name', '').strip()
+        last_name          = request.data.get('last_name', '').strip()
+        email              = request.data.get('email', '').strip().lower()
+        access_level       = request.data.get('access_level', 'no_access')
+        is_portfolio_admin = request.data.get('is_portfolio_admin', False)
+        send_email_flag    = request.data.get('send_invite_email', True)
+
+        # Validate required fields
+        if not first_name:
+            return Response({"error": "first_name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not last_name:
+            return Response({"error": "last_name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not email:
+            return Response({"error": "email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate access level
+        valid_levels = {'no_access', 'read_only', 'account_admin'}
+        if access_level not in valid_levels:
+            return Response(
+                {"error": f"Invalid access_level. Choose from: {sorted(valid_levels)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check email not already used
+        if PortfolioUser.objects.filter(email=email).exists():
+            return Response({"error": "A user with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email=email).exists():
+            return Response({"error": "This email is already registered."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create portfolio user
+        portfolio_user = PortfolioUser.objects.create(
+            portfolio_admin    = request.user,
+            first_name         = first_name,
+            last_name          = last_name,
+            email              = email,
+            access_level       = access_level,
+            is_portfolio_admin = is_portfolio_admin,
+            invite_sent_at     = tz.now() if send_email_flag else None,
+        )
+
+        # Send invite email
+        if send_email_flag:
+            portfolio_user.send_invite_email()
+
+        return Response(
+            {
+                "message": "User added successfully. Invite email sent.",
+                "user": {
+                    "id": portfolio_user.id,
+                    "first_name": portfolio_user.first_name,
+                    "last_name": portfolio_user.last_name,
+                    "email": portfolio_user.email,
+                    "access_level": portfolio_user.access_level,
+                    "is_portfolio_admin": portfolio_user.is_portfolio_admin,
+                    "invite_token": portfolio_user.invite_token,
+                }
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+
+class PortfolioUserDetailAPI(APIView):
+    """
+    PATCH  /api/portfolio/users/<id>/  → update access level
+    DELETE /api/portfolio/users/<id>/  → remove user
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, user_id):
+        from .models import PortfolioUser
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(PortfolioUser, id=user_id, portfolio_admin=request.user)
+
+    def patch(self, request, user_id):
+        if not _is_portfolio_admin(request.user):
+            return Response(
+                {"error": "Only Portfolio Administrators can update users."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        portfolio_user = self.get_object(request, user_id)
+
+        access_level       = request.data.get('access_level')
+        is_portfolio_admin = request.data.get('is_portfolio_admin')
+
+        valid_levels = {'no_access', 'read_only', 'account_admin'}
+        if access_level:
+            if access_level not in valid_levels:
+                return Response(
+                    {"error": f"Invalid access_level. Choose from: {sorted(valid_levels)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            portfolio_user.access_level = access_level
+
+        if is_portfolio_admin is not None:
+            portfolio_user.is_portfolio_admin = is_portfolio_admin
+
+        portfolio_user.save()
+
+        return Response({
+            "message": "User updated successfully.",
+            "user": {
+                "id": portfolio_user.id,
+                "first_name": portfolio_user.first_name,
+                "last_name": portfolio_user.last_name,
+                "email": portfolio_user.email,
+                "access_level": portfolio_user.access_level,
+                "is_portfolio_admin": portfolio_user.is_portfolio_admin,
+            }
+        })
+
+    def delete(self, request, user_id):
+        if not _is_portfolio_admin(request.user):
+            return Response(
+                {"error": "Only Portfolio Administrators can delete users."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        portfolio_user = self.get_object(request, user_id)
+
+        # Also delete their Django user account if they accepted the invite
+        if portfolio_user.user:
+            portfolio_user.user.delete()
+
+        portfolio_user.delete()
+        return Response({"message": "User removed successfully."}, status=status.HTTP_200_OK)
+
+
+class AcceptInviteAPI(APIView):
+    """
+    POST /api/accept-invite/<token>/
+    Body: { "password": "NewPass123", "confirm_password": "NewPass123" }
+    Sub-user sets their password and activates their account.
+    """
+
+    def post(self, request, token):
+        from .models import PortfolioUser
+
+        password         = request.data.get('password', '').strip()
+        confirm_password = request.data.get('confirm_password', '').strip()
+
+        if not password or not confirm_password:
+            return Response(
+                {"error": "password and confirm_password are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if password != confirm_password:
+            return Response({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(password) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            portfolio_user = PortfolioUser.objects.get(invite_token=token)
+        except PortfolioUser.DoesNotExist:
+            return Response({"error": "Invalid or expired invite link."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if portfolio_user.invite_accepted:
+            return Response({"error": "This invite has already been used."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create Django user account
+        user = User.objects.create_user(
+            username   = portfolio_user.email,
+            email      = portfolio_user.email,
+            password   = password,
+            first_name = portfolio_user.first_name,
+            last_name  = portfolio_user.last_name,
+            is_active  = True,
+        )
+
+        # Create UserProfile for sub-user
+        from .models import UserProfile, Membership
+        UserProfile.objects.create(
+            user               = user,
+            company            = '',
+            role               = 'other',
+            email_verified     = True,    # already verified via invite
+            is_portfolio_admin = portfolio_user.is_portfolio_admin,
+        )
+
+        # Link and mark invite accepted
+        portfolio_user.user           = user
+        portfolio_user.invite_accepted = True
+        portfolio_user.save()
+
+        tokens = get_tokens_for_user(user)
+        return Response(
+            {
+                "message": "Account activated successfully. You can now log in.",
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+            },
+            status=status.HTTP_201_CREATED
+        )
