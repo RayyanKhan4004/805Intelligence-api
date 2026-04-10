@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ReportListCreateAPI, ReportDetailAPI, CitiesByCountyAPI, FarmsByCityAPI
+from .views import ReportListCreateAPI, ReportDetailAPI, CitiesByCountyAPI, FarmsByCityAPI, ReportFilterOptionsAPI
 
 urlpatterns = [
     # Cascading dropdowns
@@ -9,4 +9,5 @@ urlpatterns = [
     # Reports CRUD
     path('reports/', ReportListCreateAPI.as_view(), name='reports'),
     path('reports/<int:report_id>/', ReportDetailAPI.as_view(), name='report-detail'),
+    path('reports/filter-options/', ReportFilterOptionsAPI.as_view(), name='report-filter-options'),
 ]

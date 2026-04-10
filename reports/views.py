@@ -158,6 +158,21 @@ class ReportListCreateAPI(APIView):
             "reports": serializer.data,
         })
 
+        # ---- Filtering ----
+        county_id = request.query_params.get('county_id')
+        city_id   = request.query_params.get('city_id')
+        farm_id   = request.query_params.get('farm_id')
+
+        if county_id:
+            reports = reports.filter(county_id=county_id)
+        if city_id:
+            reports = reports.filter(city_id=city_id)
+        if farm_id:
+            farm_report_ids = ReportFarm.objects.filter(
+                farm_id=farm_id
+            ).values_list('report_id', flat=True)
+            reports = reports.filter(id__in=farm_report_ids)
+
     def post(self, request):
         serializer = CreateReportSerializer(data=request.data)
         if not serializer.is_valid():
@@ -273,4 +288,41 @@ class ReportOptionsAPI(APIView):
                 {"key": "weekly",   "label": "Weekly"},
                 {"key": "monthly",  "label": "Monthly"},
             ],
+        })
+
+class ReportFilterOptionsAPI(APIView):
+    """
+    GET /api/reports/filter-options/
+    Returns only counties, cities and farms that exist
+    in the logged-in user's reports.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from locations.models import County, City, Farm
+
+        user_reports = Report.objects.filter(user=request.user)
+
+        # Collect unique IDs from user's reports
+        county_ids = user_reports.exclude(
+            county_id__isnull=True
+        ).values_list('county_id', flat=True).distinct()
+
+        city_ids = user_reports.exclude(
+            city_id__isnull=True
+        ).values_list('city_id', flat=True).distinct()
+
+        farm_ids = ReportFarm.objects.filter(
+            report__in=user_reports
+        ).values_list('farm_id', flat=True).distinct()
+
+        # Fetch actual objects
+        counties = County.objects.filter(id__in=county_ids).order_by('name')
+        cities   = City.objects.filter(id__in=city_ids).order_by('name')
+        farms    = Farm.objects.filter(id__in=farm_ids).order_by('name')
+
+        return Response({
+            "counties": [{"id": c.id, "name": c.name} for c in counties],
+            "cities":   [{"id": c.id, "name": c.name, "county_id": c.county_id} for c in cities],
+            "farms":    [{"id": f.id, "name": f.name, "city_id": f.city_id} for f in farms],
         })
